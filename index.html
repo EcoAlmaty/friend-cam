@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FriendCam</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #7c6af7;
+    --accent2: #f7a06a;
+    --text: #e8e8f0;
+    --muted: #5a5a7a;
+    --green: #4ade80;
+    --red: #f87171;
+  }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 20% 20%, rgba(124,106,247,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 50% at 80% 80%, rgba(247,160,106,0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .logo {
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 40px;
+    color: var(--text);
+  }
+  .logo span { color: var(--accent); }
+
+  /* ROLE SELECTOR */
+  #role-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  #role-screen h2 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  #role-screen p {
+    color: var(--muted);
+    text-align: center;
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .role-btn {
+    width: 100%;
+    padding: 20px 24px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: all 0.2s;
+    text-align: left;
+  }
+  .role-btn:hover { border-color: var(--accent); background: rgba(124,106,247,0.08); transform: translateY(-1px); }
+  .role-btn .icon { font-size: 2rem; }
+  .role-btn .desc { font-size: 0.8rem; color: var(--muted); font-weight: 400; font-family: 'JetBrains Mono', monospace; }
+
+  /* MAIN APP */
+  #app-screen { display: none; width: 100%; max-width: 900px; }
+
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .room-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .room-info strong { color: var(--accent); }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 6px 12px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot.waiting { background: var(--accent2); animation: pulse 1.5s infinite; }
+  .status-dot.error { background: var(--red); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+
+  /* VIDEO GRID */
+  .video-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 600px) { .video-grid { grid-template-columns: 1fr; } }
+
+  .video-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+    aspect-ratio: 16/9;
+  }
+
+  .video-card video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #000;
+  }
+
+  .video-label {
+    position: absolute;
+    bottom: 12px; left: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    color: var(--text);
+  }
+
+  .video-placeholder {
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .video-placeholder .big { font-size: 2.5rem; }
+
+  /* CONTROLS */
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .ctrl-btn {
+    padding: 12px 20px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ctrl-btn:hover { border-color: var(--accent); background: rgba(124,106,247,0.1); }
+  .ctrl-btn.danger { border-color: rgba(248,113,113,0.3); }
+  .ctrl-btn.danger:hover { border-color: var(--red); background: rgba(248,113,113,0.1); color: var(--red); }
+  .ctrl-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ctrl-btn.primary:hover { background: #6b59e6; }
+
+  /* LOG */
+  .log {
+    margin-top: 20px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    max-height: 100px;
+    overflow-y: auto;
+    line-height: 1.8;
+  }
+
+  /* ROOM INPUT SCREEN */
+  #room-screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    max-width: 420px;
+  }
+
+  #room-screen h2 { font-size: 1.5rem; font-weight: 800; }
+  #room-screen p { color: var(--muted); font-size: 0.85rem; font-family: 'JetBrains Mono', monospace; text-align: center; }
+
+  .input-group { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+  .input-group label { font-size: 0.8rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+
+  .btn-row { display: flex; gap: 10px; width: 100%; }
+  .btn-row .ctrl-btn { flex: 1; justify-content: center; }
+
+  .copy-box {
+    width: 100%;
+    background: var(--surface);
+    border: 1px dashed var(--accent);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--accent);
+    word-break: break-all;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .copy-box:hover { background: rgba(124,106,247,0.1); }
+  .copy-box small { display: block; color: var(--muted); font-size: 0.7rem; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<div class="logo">friend<span>cam</span></div>
+
+<!-- ROLE SELECTION -->
+<div id="role-screen">
+  <h2>Выбери роль</h2>
+  <p>// выбери кто ты в этом сеансе</p>
+  <button class="role-btn" onclick="selectRole('viewer')">
+    <span class="icon">👁️</span>
+    <div>
+      <div>Наблюдатель</div>
+      <div class="desc">Смотришь камеру друга</div>
+    </div>
+  </button>
+  <button class="role-btn" onclick="selectRole('broadcaster')">
+    <span class="icon">📡</span>
+    <div>
+      <div>Трансляция</div>
+      <div class="desc">Транслируешь свою камеру</div>
+    </div>
+  </button>
+</div>
+
+<!-- ROOM SETUP -->
+<div id="room-screen">
+  <h2 id="room-title">Комната</h2>
+  <p id="room-desc">Введи ID комнаты</p>
+
+  <div class="input-group">
+    <label>ID комнаты</label>
+    <input type="text" id="room-input" placeholder="например: mojkot42" maxlength="20" />
+  </div>
+
+  <div id="share-box" style="display:none">
+    <div class="copy-box" onclick="copyLink()" id="share-link">
+      <small>📋 Нажми чтобы скопировать ссылку для друга</small>
+      ...
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="ctrl-btn" onclick="goBack()">← Назад</button>
+    <button class="ctrl-btn primary" onclick="enterRoom()">Войти →</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app-screen">
+  <div class="app-header">
+    <div class="room-info">комната: <strong id="room-label">—</strong></div>
+    <div class="status-badge">
+      <div class="status-dot waiting" id="status-dot"></div>
+      <span id="status-text">ожидание...</span>
+    </div>
+  </div>
+
+  <div class="video-grid">
+    <div class="video-card">
+      <div class="video-placeholder" id="local-placeholder">
+        <div class="big">📷</div>
+        <div>локальная камера</div>
+      </div>
+      <video id="local-video" autoplay muted playsinline style="display:none"></video>
+      <div class="video-label" id="local-label">ты</div>
+    </div>
+    <div class="video-card">
+      <div class="video-placeholder" id="remote-placeholder">
+        <div class="big">⏳</div>
+        <div id="remote-placeholder-text">ждём подключения...</div>
+      </div>
+      <video id="remote-video" autoplay playsinline style="display:none"></video>
+      <div class="video-label" id="remote-label">друг</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" onclick="toggleMic()" id="mic-btn">🎤 Микрофон вкл</button>
+    <button class="ctrl-btn" onclick="toggleCam()" id="cam-btn">📷 Камера вкл</button>
+    <button class="ctrl-btn danger" onclick="hangUp()">📵 Завершить</button>
+  </div>
+
+  <div class="log" id="log">// лог подключения...</div>
+</div>
+
+<!-- Firebase + WebRTC -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDHkTj-xhRz7hJ4N0QSZGx4bxP3g1xVOnI",
+  authDomain: "friend-cam.firebaseapp.com",
+  databaseURL: "https://friend-cam-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "friend-cam",
+  storageBucket: "friend-cam.firebasestorage.app",
+  messagingSenderId: "338948412344",
+  appId: "1:338948412344:web:452b8f656617ed352b354d"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getDatabase(firebaseApp);
+
+const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+let role = null;
+let roomId = null;
+let pc = null;
+let localStream = null;
+let micOn = true;
+let camOn = true;
+
+// читаем роль и комнату из URL если есть
+const params = new URLSearchParams(location.search);
+const urlRole = params.get('role');
+const urlRoom = params.get('room');
+
+window.selectRole = (r) => {
+  role = r;
+  document.getElementById('role-screen').style.display = 'none';
+  const roomScreen = document.getElementById('room-screen');
+  roomScreen.style.display = 'flex';
+  document.getElementById('room-title').textContent = r === 'viewer' ? '👁️ Наблюдатель' : '📡 Трансляция';
+  document.getElementById('room-desc').textContent = r === 'viewer'
+    ? 'Введи ID комнаты от друга'
+    : 'Придумай ID комнаты и отправь другу ссылку';
+
+  if (r === 'broadcaster') {
+    const autoId = Math.random().toString(36).substr(2, 8);
+    document.getElementById('room-input').value = autoId;
+    updateShareLink(autoId);
+    document.getElementById('share-box').style.display = 'block';
+    document.getElementById('room-input').addEventListener('input', e => updateShareLink(e.target.value));
+  }
+};
+
+function updateShareLink(id) {
+  const link = `${location.origin}${location.pathname}?role=viewer&room=${id}`;
+  const el = document.getElementById('share-link');
+  el.innerHTML = `<small>📋 Нажми чтобы скопировать ссылку для друга</small>${link}`;
+  el._link = link;
+}
+
+window.copyLink = () => {
+  const el = document.getElementById('share-link');
+  navigator.clipboard.writeText(el._link);
+  el.innerHTML = `<small>✅ Скопировано!</small>${el._link}`;
+  setTimeout(() => { el.innerHTML = `<small>📋 Нажми чтобы скопировать ссылку для друга</small>${el._link}`; }, 2000);
+};
+
+window.goBack = () => {
+  document.getElementById('room-screen').style.display = 'none';
+  document.getElementById('role-screen').style.display = 'flex';
+};
+
+window.enterRoom = async () => {
+  roomId = document.getElementById('room-input').value.trim();
+  if (!roomId) return alert('Введи ID комнаты');
+  document.getElementById('room-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  document.getElementById('room-label').textContent = roomId;
+  document.getElementById('local-label').textContent = role === 'broadcaster' ? 'ты (трансляция)' : 'ты (наблюдатель)';
+  document.getElementById('remote-label').textContent = role === 'broadcaster' ? 'наблюдатель' : 'друг';
+  await startSession();
+};
+
+function log(msg) {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(state, text) {
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot ' + state;
+  document.getElementById('status-text').textContent = text;
+}
+
+async function startSession() {
+  log('Запрашиваем камеру...');
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const lv = document.getElementById('local-video');
+    lv.srcObject = localStream;
+    lv.style.display = 'block';
+    document.getElementById('local-placeholder').style.display = 'none';
+    log('Камера получена ✓');
+  } catch (e) {
+    log('Ошибка камеры: ' + e.message);
+    setStatus('error', 'нет доступа к камере');
+    return;
+  }
+
+  pc = new RTCPeerConnection(iceServers);
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+  pc.ontrack = (e) => {
+    log('Получен поток от собеседника ✓');
+    const rv = document.getElementById('remote-video');
+    rv.srcObject = e.streams[0];
+    rv.style.display = 'block';
+    document.getElementById('remote-placeholder').style.display = 'none';
+    setStatus('connected', 'подключено');
+  };
+
+  pc.onicecandidate = async (e) => {
+    if (e.candidate) {
+      const path = `rooms/${roomId}/${role}/candidates`;
+      const snap = await get(ref(db, path));
+      const arr = snap.val() || [];
+      arr.push(e.candidate.toJSON());
+      await set(ref(db, path), arr);
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    log('Состояние: ' + pc.connectionState);
+    if (pc.connectionState === 'connected') setStatus('connected', 'подключено');
+    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') setStatus('error', 'разрыв соединения');
+  };
+
+  if (role === 'broadcaster') {
+    await startBroadcaster();
+  } else {
+    await startViewer();
+  }
+}
+
+async function startBroadcaster() {
+  log('Создаём offer...');
+  setStatus('waiting', 'ожидаем наблюдателя...');
+
+  // очищаем старые данные
+  await remove(ref(db, `rooms/${roomId}`));
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await set(ref(db, `rooms/${roomId}/offer`), { sdp: offer.sdp, type: offer.type });
+  log('Offer отправлен, ждём answer...');
+
+  // слушаем answer
+  onValue(ref(db, `rooms/${roomId}/answer`), async (snap) => {
+    if (snap.val() && !pc.currentRemoteDescription) {
+      const answer = snap.val();
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      log('Answer получен ✓');
+      loadCandidates('viewer');
+    }
+  });
+}
+
+async function startViewer() {
+  log('Ждём offer от транслятора...');
+  setStatus('waiting', 'ждём трансляцию...');
+  document.getElementById('remote-placeholder-text').textContent = 'ждём трансляцию...';
+
+  onValue(ref(db, `rooms/${roomId}/offer`), async (snap) => {
+    if (!snap.val()) return;
+    if (pc.signalingState !== 'stable') return;
+    const offer = snap.val();
+    log('Offer получен ✓');
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await set(ref(db, `rooms/${roomId}/answer`), { sdp: answer.sdp, type: answer.type });
+    log('Answer отправлен ✓');
+    loadCandidates('broadcaster');
+  });
+}
+
+async function loadCandidates(from) {
+  onValue(ref(db, `rooms/${roomId}/${from}/candidates`), async (snap) => {
+    if (!snap.val()) return;
+    for (const c of snap.val()) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {}
+    }
+  });
+}
+
+window.toggleMic = () => {
+  micOn = !micOn;
+  localStream.getAudioTracks().forEach(t => t.enabled = micOn);
+  document.getElementById('mic-btn').textContent = micOn ? '🎤 Микрофон вкл' : '🔇 Микрофон выкл';
+};
+
+window.toggleCam = () => {
+  camOn = !camOn;
+  localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+  document.getElementById('cam-btn').textContent = camOn ? '📷 Камера вкл' : '📷 Камера выкл';
+};
+
+window.hangUp = async () => {
+  if (pc) pc.close();
+  if (localStream) localStream.getTracks().forEach(t => t.stop());
+  await remove(ref(db, `rooms/${roomId}`));
+  location.reload();
+};
+
+// автозапуск если пришли по ссылке
+if (urlRole && urlRoom) {
+  role = urlRole;
+  roomId = urlRoom;
+  document.getElementById('role-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  document.getElementById('room-label').textContent = roomId;
+  document.getElementById('local-label').textContent = role === 'broadcaster' ? 'ты (трансляция)' : 'ты (наблюдатель)';
+  document.getElementById('remote-label').textContent = role === 'broadcaster' ? 'наблюдатель' : 'друг';
+  startSession();
+}
+</script>
+</body>
+</html>
